@@ -124,7 +124,7 @@ fn read_string_silently() ![]u8 {
         const c = @cImport({
             @cInclude("stdlib.h");
         });
-        c.system("stty -echo");
+        _ = c.system("stty -echo");
         hidden_input = true;
     }
     if (hidden_input) {
@@ -133,7 +133,9 @@ fn read_string_silently() ![]u8 {
         try std.io.getStdOut().writer().print("Please enter password(Password will be visible!):\n", .{});
     }
 
-    const newline: u8 = 13;
+    var newline: u8 = 13;
+    if (os == .linux) newline = 10;
+
     const max_size: usize = 1000;
     // Deallocation at end of program
     var allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -143,7 +145,10 @@ fn read_string_silently() ![]u8 {
     if (os == .windows) {
         // TODO: Enable echo
     } else if (os == .linux) {
-        c.system("stty echo");
+        const c = @cImport({
+            @cInclude("stdlib.h");
+        });
+        _ = c.system("stty echo");
     }
     return read;
 }
