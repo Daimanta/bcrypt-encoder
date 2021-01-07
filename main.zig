@@ -83,14 +83,18 @@ pub fn main() !void {
             hash[i] = char;
         }
     }
-
+    
+    var read_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer read_allocator.deinit();
+    errdefer read_allocator.deinit();
+    
     if (mode == Mode.encrypt) {
-        var password: []u8 = try read_string_silently();
+        var password: []u8 = try read_string_silently(&read_allocator.allocator);
         try std.io.getStdOut().writer().print("{}\n", .{bcrypt_string(password[0..], rounds)});
         zero_password(password);
         return;
     } else if (mode == Mode.check) {
-        var password = try read_string_silently();
+        var password = try read_string_silently(&read_allocator.allocator);
         try std.io.getStdOut().writer().print("{}\n", .{verify_password(hash, password[0..])});
         zero_password(password);
         return;
@@ -114,7 +118,7 @@ fn verify_password(hash: [60]u8, password: []const u8) bool {
     return true;
 }
 
-fn read_string_silently() ![]u8 {
+fn read_string_silently(allocator: *std.mem.Allocator) ![]u8 {
     const os = std.builtin.os.tag;
 
     var hidden_input: bool = false;
@@ -138,9 +142,9 @@ fn read_string_silently() ![]u8 {
 
     const max_size: usize = 1000;
     // Deallocation at end of program
-    var allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-
-    const read = try std.io.getStdIn().reader().readUntilDelimiterAlloc(&allocator.allocator, newline, max_size);
+    
+    
+    const read = try std.io.getStdIn().reader().readUntilDelimiterAlloc(allocator, newline, max_size);
 
     if (os == .windows) {
         // TODO: Enable echo
