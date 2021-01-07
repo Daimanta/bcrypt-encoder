@@ -13,4 +13,5 @@ pub fn build(b: *Builder) void {
     _ = b.standardReleaseOptions();
     _ = b.version(version.major, version.minor, version.patch);
     b.default_step.dependOn(&exe.step);
+    exe.install();
 }
