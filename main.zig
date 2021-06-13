@@ -29,11 +29,11 @@ pub fn main() !void {
     // Initalize our diagnostics, which can be used for reporting useful errors.
     // This is optional. You can also just pass `null` to `parser.next` if you
     // don't care about the extra information `Diagnostics` provides.
-    var diag: clap.Diagnostic = undefined;
+    var diag = clap.Diagnostic{};
 
-    var args = clap.parseEx(clap.Help, &params, allocator, &iter, &diag) catch |err| {
+    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report 'Invalid argument [arg]'
-        diag.report(std.io.getStdErr().outStream(), err) catch {};
+        diag.report(std.io.getStdOut().writer(), err) catch {};
         return;
     };
     defer args.deinit();
@@ -44,9 +44,9 @@ pub fn main() !void {
     if (args.flag("--help")) {
         var buf: [1024]u8 = undefined;
         var slice_stream = std.io.fixedBufferStream(&buf);
-        try clap.help(slice_stream.outStream(), &params);
+        try clap.help(std.io.getStdOut().writer(), &params);
         debug.warn("Usage: bcrypt-encoder [OPTION] \n Hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\n\n If arguments are possible, they are mandatory unless specified otherwise.\n", .{});
-        debug.warn("{}\n", .{slice_stream.getWritten()});
+        debug.warn("{s}\n", .{slice_stream.getWritten()});
         return;
     }
     if (args.option("--rounds")) |n| {
@@ -90,12 +90,12 @@ pub fn main() !void {
     
     if (mode == Mode.encrypt) {
         var password: []u8 = try read_string_silently(&read_allocator.allocator);
-        try std.io.getStdOut().writer().print("{}\n", .{bcrypt_string(password[0..], rounds)});
+        try std.io.getStdOut().writer().print("{s}\n", .{bcrypt_string(password[0..], rounds)});
         zero_password(password);
         return;
     } else if (mode == Mode.check) {
         var password = try read_string_silently(&read_allocator.allocator);
-        try std.io.getStdOut().writer().print("{}\n", .{verify_password(hash, password[0..])});
+        try std.io.getStdOut().writer().print("{s}\n", .{verify_password(hash, password[0..])});
         zero_password(password);
         return;
     } else {
