@@ -3,6 +3,12 @@ const bcrypt = std.crypto.pwhash.bcrypt;
 const clap = @import("clap.zig");
 const debug = std.debug;
 const Allocator = std.mem.Allocator;
+const windows = std.os.windows;
+const WINAPI = std.os.windows.WINAPI;
+const HANDLE = std.os.windows.HANDLE;
+const DWORD = std.os.windows.DWORD;
+const LPDWORD = std.os.windows.LPDWORD;
+const BOOL = std.os.windows.BOOL;
 
 const DEFAULT_ROUNDS: u6 = 10;
 const Mode = enum {
@@ -118,12 +124,22 @@ fn verify_password(hash: [60]u8, password: []const u8) bool {
     return true;
 }
 
+pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(WINAPI) BOOL;
+pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: LPDWORD) BOOL;
+
+
 fn read_string_silently(allocator: *std.mem.Allocator) ![]u8 {
     const os = std.builtin.os.tag;
 
     var hidden_input: bool = false;
     if (os == .windows) {
-        // TODO: Disable echo
+        const ENABLE_ECHO_INPUT: u32 = 4;
+        var handle = try windows.GetStdHandle(std.os.windows.STD_INPUT_HANDLE);
+        var my_val: u32 = 0;
+        var current_mode: LPDWORD = &my_val;
+        _ = GetConsoleMode(handle, current_mode);
+        _ = SetConsoleMode(handle, current_mode.* & ~ENABLE_ECHO_INPUT);
+        hidden_input = true;
     } else if (os == .linux) {
         const c = @cImport({
             @cInclude("stdlib.h");
@@ -147,7 +163,7 @@ fn read_string_silently(allocator: *std.mem.Allocator) ![]u8 {
     const read = try std.io.getStdIn().reader().readUntilDelimiterAlloc(allocator, newline, max_size);
 
     if (os == .windows) {
-        // TODO: Enable echo
+        // Echo re-enables automatically
     } else if (os == .linux) {
         const c = @cImport({
             @cInclude("stdlib.h");
