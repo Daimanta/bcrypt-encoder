@@ -9,6 +9,9 @@ const HANDLE = std.os.windows.HANDLE;
 const DWORD = std.os.windows.DWORD;
 const LPDWORD = std.os.windows.LPDWORD;
 const BOOL = std.os.windows.BOOL;
+const bits = std.os;
+const linux = std.os.linux;
+const TCSA = bits.TCSA;
 
 const DEFAULT_ROUNDS: u6 = 10;
 const Mode = enum {
@@ -81,7 +84,7 @@ pub fn main() !void {
             return;
         }
         if (n.len != 60) {
-            debug.warn("Invalid hash length", .{});
+            debug.warn("Invalid hash length. Expected length 60, got length {d}\n", .{n.len});
             return;
         }
         mode = Mode.check;
@@ -141,10 +144,9 @@ fn read_string_silently(allocator: *std.mem.Allocator) ![]u8 {
         _ = SetConsoleMode(handle, current_mode.* & ~ENABLE_ECHO_INPUT);
         hidden_input = true;
     } else if (os == .linux) {
-        const c = @cImport({
-            @cInclude("stdlib.h");
-        });
-        _ = c.system("stty -echo");
+        var import_termios = try bits.tcgetattr(bits.STDIN_FILENO);
+        import_termios.lflag = import_termios.lflag & ~@as(u32, linux.ECHO);
+        try bits.tcsetattr(bits.STDIN_FILENO, TCSA.NOW, import_termios);
         hidden_input = true;
     }
     if (hidden_input) {
@@ -165,10 +167,9 @@ fn read_string_silently(allocator: *std.mem.Allocator) ![]u8 {
     if (os == .windows) {
         // Echo re-enables automatically
     } else if (os == .linux) {
-        const c = @cImport({
-            @cInclude("stdlib.h");
-        });
-        _ = c.system("stty echo");
+        var import_termios = try bits.tcgetattr(bits.STDIN_FILENO);
+        import_termios.lflag = import_termios.lflag | @as(u32, linux.ECHO);
+        try bits.tcsetattr(bits.STDIN_FILENO, TCSA.NOW, import_termios);
     }
     return read;
 }
