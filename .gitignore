@@ -3,3 +3,4 @@ zig-cache
 *.pdb
 /main
 /zig-out/
+/.idea
