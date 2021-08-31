@@ -4,3 +4,4 @@ zig-cache
 /main
 /zig-out/
 /.idea
+/debian/bcrypt-encoder/usr/bin
