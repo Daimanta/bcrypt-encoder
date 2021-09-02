@@ -1,7 +1,7 @@
 Package: bcrypt-encoder
 Version: _VERSIONPLACEHOLDER_
 Maintainer: Léon van der Kaap <bcrypt@leonvanderkaap.nl>
-Architecture: any
+Architecture: all
 Section: utils
 Installed-Size: _SIZEPLACEHOLDER_
 Priority: optional
