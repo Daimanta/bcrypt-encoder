@@ -3,3 +3,5 @@ zig-cache
 *.pdb
 /main
 /zig-out/
+/.idea
+/debian/bcrypt-encoder/usr/bin
