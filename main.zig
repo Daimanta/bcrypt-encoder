@@ -1,17 +1,24 @@
 const std = @import("std");
-const bcrypt = std.crypto.pwhash.bcrypt;
+
 const clap = @import("clap.zig");
-const debug = std.debug;
-const Allocator = std.mem.Allocator;
-const windows = std.os.windows;
-const WINAPI = std.os.windows.WINAPI;
-const HANDLE = std.os.windows.HANDLE;
-const DWORD = std.os.windows.DWORD;
-const LPDWORD = std.os.windows.LPDWORD;
-const BOOL = std.os.windows.BOOL;
+const version = @import("version.zig");
+
+const bcrypt = std.crypto.pwhash.bcrypt;
 const bits = std.os;
+const debug = std.debug;
 const linux = std.os.linux;
 const TCSA = bits.TCSA;
+const windows = std.os.windows;
+
+const Allocator = std.mem.Allocator;
+
+const BOOL = std.os.windows.BOOL;
+const DWORD = std.os.windows.DWORD;
+const HANDLE = std.os.windows.HANDLE;
+const LPDWORD = std.os.windows.LPDWORD;
+const WINAPI = std.os.windows.WINAPI;
+
+
 
 const DEFAULT_ROUNDS: u6 = 10;
 const Mode = enum {
@@ -24,10 +31,12 @@ pub fn main() !void {
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
     const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help             Display this help and exit.              ") catch unreachable,
-        clap.parseParam("-r, --rounds <NUM>     Indicates the log number of rounds, 1<= rounds <= 31. Default value is 10.") catch unreachable,
         clap.parseParam("-c, --check <HASH>     Prompts for a password. 'true' or 'false' will be returned whether the password matches the hash. Cannot be combined with -er.") catch unreachable,
         clap.parseParam("-e, --encrypt     Prompts for a password. The result will be a bcrypt hash of the password. Cannot be combined with -c. Default option.") catch unreachable,
+        clap.parseParam("-h, --help             Display this help and exit.") catch unreachable,
+        clap.parseParam("-s, --stdin             Read the input text from stdin instead of prompting.") catch unreachable,
+        clap.parseParam("-r, --rounds <NUM>     Indicates the log number of rounds, 1<= rounds <= 31. Default value is 10.") catch unreachable,
+        clap.parseParam("-V, --version     Display the version number and exit.") catch unreachable,
     };
 
     // We then initialize an argument iterator. We will use the OsIterator as it nicely
@@ -57,6 +66,9 @@ pub fn main() !void {
         debug.warn("Usage: bcrypt-encoder [OPTION] \n Hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\n\n If arguments are possible, they are mandatory unless specified otherwise.\n", .{});
         debug.warn("{s}\n", .{slice_stream.getWritten()});
         return;
+    } else if (args.flag("--version")) {
+        debug.print("Bcrypt-encoder version {d}.{d}.{d} © Léon van der Kaap 2021\nThis software is BSD 3-clause licensed.\n", .{version.major, version.minor, version.patch});
+        return;
     }
     if (args.option("--rounds")) |n| {
         var temp: u32 = 0;
@@ -76,6 +88,7 @@ pub fn main() !void {
     }
 
     const encrypt = args.flag("-e");
+    const use_stdin = args.flag("-s");
     var hash: [60]u8 = undefined;
 
     if (args.option("-c")) |n| {
@@ -98,12 +111,44 @@ pub fn main() !void {
     errdefer read_allocator.deinit();
     
     if (mode == Mode.encrypt) {
-        var password: []u8 = try read_string_silently(&read_allocator.allocator);
+        var password: []u8 = undefined;
+        if (use_stdin) {
+            const stdin = std.io.getStdIn().reader();
+            password = stdin.readAllAlloc(&read_allocator.allocator, 1 << 30) catch |err|{
+                debug.warn("Reading stdin failed\n", .{});
+                return;
+            };
+        } else {
+            password = read_string_silently(&read_allocator.allocator) catch |err| {
+                if (err == error.NotATerminal) {
+                    debug.warn("Input passed from stdin while not expecting it. Exiting.\n", .{});
+                } else {
+                    debug.warn("Error occurred while reading password. Exiting.\n", .{});
+                }
+                return;
+            };
+        }
         try std.io.getStdOut().writer().print("{s}\n", .{bcrypt_string(password[0..], rounds)});
         zero_password(password);
         return;
     } else if (mode == Mode.check) {
-        var password = try read_string_silently(&read_allocator.allocator);
+        var password: []u8 = undefined;
+        if (use_stdin) {
+            const stdin = std.io.getStdIn().reader();
+            password = stdin.readAllAlloc(&read_allocator.allocator, 1 << 30) catch |err|{
+                debug.warn("Reading stdin failed\n", .{});
+                return;
+            };
+        } else {
+            password = read_string_silently(&read_allocator.allocator) catch |err| {
+                if (err == error.NotATerminal) {
+                    debug.warn("Input passed from stdin while not expecting it. Exiting.\n", .{});
+                } else {
+                    debug.warn("Error occurred while reading password. Exiting.\n", .{});
+                }
+                return;
+            };
+        }
         try std.io.getStdOut().writer().print("{s}\n", .{verify_password(hash, password[0..])});
         zero_password(password);
         return;
