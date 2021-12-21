@@ -11,6 +11,8 @@ const TCSA = bits.TCSA;
 const windows = std.os.windows;
 
 const Allocator = std.mem.Allocator;
+var default_allocator = std.heap.page_allocator;
+const print = debug.print;
 
 const BOOL = std.os.windows.BOOL;
 const DWORD = std.os.windows.DWORD;
@@ -26,7 +28,7 @@ const Mode = enum {
 };
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+    var allocator = default_allocator;
 
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
@@ -63,24 +65,24 @@ pub fn main() !void {
         var buf: [1024]u8 = undefined;
         var slice_stream = std.io.fixedBufferStream(&buf);
         try clap.help(std.io.getStdOut().writer(), &params);
-        debug.warn("Usage: bcrypt-encoder [OPTION] \n Hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\n\n If arguments are possible, they are mandatory unless specified otherwise.\n", .{});
-        debug.warn("{s}\n", .{slice_stream.getWritten()});
+        print("Usage: bcrypt-encoder [OPTION] \n Hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\n\n If arguments are possible, they are mandatory unless specified otherwise.\n", .{});
+        print("{s}\n", .{slice_stream.getWritten()});
         return;
     } else if (args.flag("--version")) {
-        debug.print("Bcrypt-encoder version {d}.{d}.{d} © Léon van der Kaap 2021\nThis software is BSD 3-clause licensed.\n", .{version.major, version.minor, version.patch});
+        print("Bcrypt-encoder version {d}.{d}.{d} © Léon van der Kaap 2021\nThis software is BSD 3-clause licensed.\n", .{version.major, version.minor, version.patch});
         return;
     }
     if (args.option("--rounds")) |n| {
         var temp: u32 = 0;
         if (std.fmt.parseInt(u32, n[0..], 10)) |num| {
             temp = num;
-        } else |err| {
-            debug.warn("Round number is not a valid number\n", .{});
+        } else |_| {
+            print("Round number is not a valid number\n", .{});
             return;
         }
 
         if (temp < 1 or temp > 31) {
-            debug.warn("Rounds must be >=1 and <=31\n", .{});
+            print("Rounds must be >=1 and <=31\n", .{});
             return;
         } else {
             rounds = @intCast(u6, temp);
@@ -93,11 +95,11 @@ pub fn main() !void {
 
     if (args.option("-c")) |n| {
         if (encrypt) {
-            debug.warn("-c conflicts with -e\n", .{});
+            print("-c conflicts with -e\n", .{});
             return;
         }
         if (n.len != 60) {
-            debug.warn("Invalid hash length. Expected length 60, got length {d}\n", .{n.len});
+            print("Invalid hash length. Expected length 60, got length {d}\n", .{n.len});
             return;
         }
         mode = Mode.check;
@@ -114,16 +116,16 @@ pub fn main() !void {
         var password: []u8 = undefined;
         if (use_stdin) {
             const stdin = std.io.getStdIn().reader();
-            password = stdin.readAllAlloc(&read_allocator.allocator, 1 << 30) catch |err|{
-                debug.warn("Reading stdin failed\n", .{});
+            password = stdin.readAllAlloc(read_allocator.allocator(), 1 << 30) catch {
+                print("Reading stdin failed\n", .{});
                 return;
             };
         } else {
-            password = read_string_silently(&read_allocator.allocator) catch |err| {
+            password = read_string_silently(read_allocator.allocator()) catch |err| {
                 if (err == error.NotATerminal) {
-                    debug.warn("Input passed from stdin while not expecting it. Exiting.\n", .{});
+                    print("Input passed from stdin while not expecting it. Exiting.\n", .{});
                 } else {
-                    debug.warn("Error occurred while reading password. Exiting.\n", .{});
+print("Error occurred while reading password. Exiting.\n", .{});
                 }
                 return;
             };
@@ -135,16 +137,16 @@ pub fn main() !void {
         var password: []u8 = undefined;
         if (use_stdin) {
             const stdin = std.io.getStdIn().reader();
-            password = stdin.readAllAlloc(&read_allocator.allocator, 1 << 30) catch |err|{
-                debug.warn("Reading stdin failed\n", .{});
+            password = stdin.readAllAlloc(read_allocator.allocator(), 1 << 30) catch {
+                print("Reading stdin failed\n", .{});
                 return;
             };
         } else {
-            password = read_string_silently(&read_allocator.allocator) catch |err| {
+            password = read_string_silently(read_allocator.allocator()) catch |err| {
                 if (err == error.NotATerminal) {
-                    debug.warn("Input passed from stdin while not expecting it. Exiting.\n", .{});
+                    print("Input passed from stdin while not expecting it. Exiting.\n", .{});
                 } else {
-                    debug.warn("Error occurred while reading password. Exiting.\n", .{});
+                    print("Error occurred while reading password. Exiting.\n", .{});
                 }
                 return;
             };
@@ -163,12 +165,19 @@ fn zero_password(password: []u8) void {
     }
 }
 
-fn bcrypt_string(password: []const u8, rounds: ?u6) ![60]u8 {
-    return bcrypt.strHash(password, rounds orelse DEFAULT_ROUNDS);
+fn bcrypt_string(password: []const u8, rounds: ?u6) std.crypto.pwhash.Error![]u8 {
+    var params: bcrypt.Params = .{.rounds_log = rounds orelse DEFAULT_ROUNDS};
+    var hash_options: bcrypt.HashOptions = .{.allocator = default_allocator, .params = params, .encoding = std.crypto.pwhash.Encoding.phc};
+    var buffer: [bcrypt.hash_length]u8 = undefined;
+    _ = try bcrypt.strHash(password, hash_options, buffer[0..]);
+    
+    var result = try default_allocator.alloc(u8, bcrypt.hash_length);
+    std.mem.copy(u8, result, buffer[0..]);
+    return result;
 }
 
 fn verify_password(hash: [60]u8, password: []const u8) bool {
-    bcrypt.strVerify(hash, password) catch |err| return false;
+    bcrypt.strVerify(hash[0..], password, .{}) catch return false;
     return true;
 }
 
@@ -176,8 +185,8 @@ pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) c
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: LPDWORD) BOOL;
 
 
-fn read_string_silently(allocator: *std.mem.Allocator) ![]u8 {
-    const os = std.builtin.os.tag;
+fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
+    const os = @import("builtin").os.tag;
 
     var hidden_input: bool = false;
     if (os == .windows) {
