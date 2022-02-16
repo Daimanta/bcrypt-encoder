@@ -12,20 +12,15 @@ const windows = std.os.windows;
 
 const Allocator = std.mem.Allocator;
 var default_allocator = std.heap.page_allocator;
-const print = debug.print;
 
 const BOOL = std.os.windows.BOOL;
 const DWORD = std.os.windows.DWORD;
 const HANDLE = std.os.windows.HANDLE;
-const LPDWORD = std.os.windows.LPDWORD;
+const LPDWORD = *DWORD;
 const WINAPI = std.os.windows.WINAPI;
 
-
-
 const DEFAULT_ROUNDS: u6 = 10;
-const Mode = enum {
-    encrypt, check
-};
+const Mode = enum { encrypt, check };
 
 pub fn main() !void {
     var allocator = default_allocator;
@@ -69,7 +64,7 @@ pub fn main() !void {
         print("{s}\n", .{slice_stream.getWritten()});
         return;
     } else if (args.flag("--version")) {
-        print("Bcrypt-encoder version {d}.{d}.{d} © Léon van der Kaap 2021\nThis software is BSD 3-clause licensed.\n", .{version.major, version.minor, version.patch});
+        print("Bcrypt-encoder version {d}.{d}.{d} © Léon van der Kaap 2021\nThis software is BSD 3-clause licensed.\n", .{ version.major, version.minor, version.patch });
         return;
     }
     if (args.option("--rounds")) |n| {
@@ -107,11 +102,11 @@ pub fn main() !void {
             hash[i] = char;
         }
     }
-    
+
     var read_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer read_allocator.deinit();
     errdefer read_allocator.deinit();
-    
+
     if (mode == Mode.encrypt) {
         var password: []u8 = undefined;
         if (use_stdin) {
@@ -122,15 +117,24 @@ pub fn main() !void {
             };
         } else {
             password = read_string_silently(read_allocator.allocator()) catch |err| {
-                if (err == error.NotATerminal) {
-                    print("Input passed from stdin while not expecting it. Exiting.\n", .{});
-                } else {
-print("Error occurred while reading password. Exiting.\n", .{});
+                const os = @import("builtin").os.tag;
+                if (os == .windows) {
+                    print("Error occurred while reading password. Exiting.\n", .{});
+                } else if (os == .linux) {
+                    if (err == error.NotATerminal) {
+                        print("Input passed from stdin while not expecting it. Exiting.\n", .{});
+                    } else {
+                        print("Error occurred while reading password. Exiting.\n", .{});
+                    }
                 }
                 return;
             };
         }
-        try std.io.getStdOut().writer().print("{s}\n", .{bcrypt_string(password[0..], rounds)});
+        const result = bcrypt_string(password[0..], rounds) catch |err| {
+            print("Error: {s}\n", .{err});
+            return;
+        };
+        print("{s}\n", .{result});
         zero_password(password);
         return;
     } else if (mode == Mode.check) {
@@ -143,15 +147,20 @@ print("Error occurred while reading password. Exiting.\n", .{});
             };
         } else {
             password = read_string_silently(read_allocator.allocator()) catch |err| {
-                if (err == error.NotATerminal) {
-                    print("Input passed from stdin while not expecting it. Exiting.\n", .{});
-                } else {
+                const os = @import("builtin").os.tag;
+                if (os == .windows) {
                     print("Error occurred while reading password. Exiting.\n", .{});
+                } else if (os == .linux) {
+                    if (err == error.NotATerminal) {
+                        print("Input passed from stdin while not expecting it. Exiting.\n", .{});
+                    } else {
+                        print("Error occurred while reading password. Exiting.\n", .{});
+                    }
                 }
                 return;
             };
         }
-        try std.io.getStdOut().writer().print("{s}\n", .{verify_password(hash, password[0..])});
+        print("{s}\n", .{verify_password(hash, password[0..])});
         zero_password(password);
         return;
     } else {
@@ -166,14 +175,11 @@ fn zero_password(password: []u8) void {
 }
 
 fn bcrypt_string(password: []const u8, rounds: ?u6) std.crypto.pwhash.Error![]u8 {
-    var params: bcrypt.Params = .{.rounds_log = rounds orelse DEFAULT_ROUNDS};
-    var hash_options: bcrypt.HashOptions = .{.allocator = default_allocator, .params = params, .encoding = std.crypto.pwhash.Encoding.phc};
+    var params: bcrypt.Params = .{ .rounds_log = rounds orelse DEFAULT_ROUNDS };
+    var hash_options: bcrypt.HashOptions = .{ .allocator = default_allocator, .params = params, .encoding = std.crypto.pwhash.Encoding.crypt };
     var buffer: [bcrypt.hash_length]u8 = undefined;
     _ = try bcrypt.strHash(password, hash_options, buffer[0..]);
-    
-    var result = try default_allocator.alloc(u8, bcrypt.hash_length);
-    std.mem.copy(u8, result, buffer[0..]);
-    return result;
+    return default_allocator.dupe(u8, buffer[0..]);
 }
 
 fn verify_password(hash: [60]u8, password: []const u8) bool {
@@ -183,7 +189,6 @@ fn verify_password(hash: [60]u8, password: []const u8) bool {
 
 pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(WINAPI) BOOL;
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: LPDWORD) BOOL;
-
 
 fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
     const os = @import("builtin").os.tag;
@@ -204,9 +209,9 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
         hidden_input = true;
     }
     if (hidden_input) {
-        try std.io.getStdOut().writer().print("Please enter password:\n", .{});
+        print("Please enter password:\n", .{});
     } else {
-        try std.io.getStdOut().writer().print("Please enter password(Password will be visible!):\n", .{});
+        print("Please enter password(Password will be visible!):\n", .{});
     }
 
     var newline: u8 = 13;
@@ -214,8 +219,7 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
 
     const max_size: usize = 1000;
     // Deallocation at end of program
-    
-    
+
     const read = try std.io.getStdIn().reader().readUntilDelimiterAlloc(allocator, newline, max_size);
 
     if (os == .windows) {
@@ -226,4 +230,8 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
         try bits.tcsetattr(bits.STDIN_FILENO, TCSA.NOW, import_termios);
     }
     return read;
+}
+
+pub fn print(comptime format_string: []const u8, args: anytype) void {
+    std.io.getStdOut().writer().print(format_string, args) catch return;
 }
