@@ -1,8 +1,8 @@
-== Third-party software ==
+# Third-party software
 
 'zig-clap' is developed by third parties. It was retrieved as software that is licensed under 'The Unlicense'. https://github.com/Hejsil/zig-clap
 
-== License ==
+## License
 
 Bcrypt Encoder is licensed under the '3-clause BSD' license.
 

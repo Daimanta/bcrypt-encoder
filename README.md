@@ -1,8 +1,8 @@
-== Bcrypt encoder ==
+# Bcrypt encoder
 
 Bcrypt encoder hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.
 
-== Usage ==
+## Usage
 
 ```
 Usage: bcrypt-encoder [OPTION]
