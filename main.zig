@@ -3,7 +3,7 @@ const std = @import("std");
 const clap = @import("clap.zig");
 const version = @import("version.zig");
 
-const bcrypt = std.crypto.pwhash.bcrypt;
+const bcrypt = @import("bcrypt.zig");
 const bits = std.os;
 const debug = std.debug;
 const linux = std.os.linux;
@@ -57,10 +57,10 @@ pub fn main() !void {
     var mode = Mode.encrypt;
 
     if (args.flag("--help")) {
+        print("Usage: bcrypt-encoder [OPTION]\nHashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\nIf arguments are possible, they are mandatory unless specified otherwise.\n\n", .{});
         var buf: [1024]u8 = undefined;
         var slice_stream = std.io.fixedBufferStream(&buf);
         try clap.help(std.io.getStdOut().writer(), &params);
-        print("Usage: bcrypt-encoder [OPTION] \n Hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\n\n If arguments are possible, they are mandatory unless specified otherwise.\n", .{});
         print("{s}\n", .{slice_stream.getWritten()});
         return;
     } else if (args.flag("--version")) {
@@ -131,7 +131,7 @@ pub fn main() !void {
             };
         }
         const result = bcrypt_string(password[0..], rounds) catch |err| {
-            print("Error: {s}\n", .{err});
+            print("Error: {}\n", .{err});
             return;
         };
         print("{s}\n", .{result});
@@ -160,7 +160,7 @@ pub fn main() !void {
                 return;
             };
         }
-        print("{s}\n", .{verify_password(hash, password[0..])});
+        print("{}\n", .{verify_password(hash, password[0..])});
         zero_password(password);
         return;
     } else {

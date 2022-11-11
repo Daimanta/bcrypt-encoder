@@ -54,7 +54,7 @@ pub const Values = enum {
 ///     * Positional parameters must take a value.
 pub fn Param(comptime Id: type) type {
     return struct {
-        id: Id = Id{},
+        id: Id = undefined,
         names: Names = Names{},
         takes_value: Values = .none,
     };
@@ -77,7 +77,7 @@ pub fn parseParam(line: []const u8) !Param(Help) {
     var it = mem.tokenize(u8, line, " \t");
     var param_str = it.next() orelse return error.NoParamFound;
 
-    const short_name = if (!mem.startsWith(u8, param_str, "--") and
+    const short_name: ?u8 = if (!mem.startsWith(u8, param_str, "--") and
         mem.startsWith(u8, param_str, "-"))
     blk: {
         found_comma = param_str[param_str.len - 1] == ',';
@@ -87,18 +87,18 @@ pub fn parseParam(line: []const u8) !Param(Help) {
         if (param_str.len != 2)
             return error.InvalidShortParam;
 
-        const short_name = param_str[1];
+        const short_name1 = param_str[1];
         if (!found_comma) {
             var res = parseParamRest(it.rest());
-            res.names.short = short_name;
+            res.names.short = short_name1;
             return res;
         }
 
         param_str = it.next() orelse return error.NoParamFound;
-        break :blk short_name;
+        break :blk short_name1;
     } else null;
 
-    const long_name = if (mem.startsWith(u8, param_str, "--")) blk: {
+    const long_name: ?[]const u8 = if (mem.startsWith(u8, param_str, "--")) blk: {
         if (param_str[param_str.len - 1] == ',')
             return error.TrailingComma;
 
@@ -446,8 +446,8 @@ fn printParam(
 
     switch (param.takes_value) {
         .none => {},
-        .one => try stream.print(" <{s}>", .{valueText(context, param)}),
-        .many => try stream.print(" <{s}>...", .{valueText(context, param)}),
+        .one => try stream.print(" <{s}>", .{try valueText(context, param)}),
+        .many => try stream.print(" <{s}>...", .{try valueText(context, param)}),
     }
 }
 
@@ -464,11 +464,11 @@ pub fn helpEx(
         helpText: fn (Param(Id)) []const u8,
         valueText: fn (Param(Id)) []const u8,
 
-        pub fn help(c: @This(), p: Param(Id)) error{}![]const u8 {
+        pub fn help(comptime c: @This(), p: Param(Id)) error{}![]const u8 {
             return c.helpText(p);
         }
 
-        pub fn value(c: @This(), p: Param(Id)) error{}![]const u8 {
+        pub fn value(comptime c: @This(), p: Param(Id)) error{}![]const u8 {
             return c.valueText(p);
         }
     };
