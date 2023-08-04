@@ -3,7 +3,7 @@ const std = @import("std");
 const clap = @import("clap.zig");
 const version = @import("version.zig");
 
-const bcrypt = @import("bcrypt.zig");
+const bcrypt = std.crypto.pwhash.bcrypt;
 const bits = std.os;
 const debug = std.debug;
 const linux = std.os.linux;
@@ -80,7 +80,7 @@ pub fn main() !void {
             print("Rounds must be >=1 and <=31\n", .{});
             return;
         } else {
-            rounds = @intCast(u6, temp);
+            rounds = @intCast(temp);
         }
     }
 
@@ -98,7 +98,7 @@ pub fn main() !void {
             return;
         }
         mode = Mode.check;
-        for (n) |char, i| {
+        for (n, 0..) |char, i| {
             hash[i] = char;
         }
     }

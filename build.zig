@@ -1,5 +1,5 @@
 const std = @import("std");
-const Builder = std.build.Builder;
+const Builder = std.Build;
 const version = @import("version.zig");
 const builtin = std.builtin;
 
@@ -9,10 +9,7 @@ pub fn build(b: *Builder) void {
         std.debug.print("This project does not compile with a Zig version <0.10.x. Exiting.", .{});
         std.os.exit(1);
     }
-    const exe = b.addExecutable("main", "main.zig");
-    b.setPreferredReleaseMode(builtin.Mode.ReleaseSafe);
-    _ = b.standardReleaseOptions();
-    _ = b.version(version.major, version.minor, version.patch);
+    const exe = b.addExecutable(.{.name = "main", .root_source_file = .{.path = "main.zig"}, .optimize = .ReleaseSafe, .version = .{.major = version.major, .minor = version.minor, .patch = version.patch}});
     b.default_step.dependOn(&exe.step);
-    exe.install();
+    b.installArtifact(exe);
 }
