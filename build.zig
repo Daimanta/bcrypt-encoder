@@ -1,5 +1,5 @@
 const std = @import("std");
-const Builder = std.Build.Builder;
+const Builder = std.Build;
 const version = @import("version.zig");
 const builtin = std.builtin;
 
