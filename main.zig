@@ -23,7 +23,7 @@ const DEFAULT_ROUNDS: u6 = 10;
 const Mode = enum { encrypt, check };
 
 pub fn main() !void {
-    var allocator = default_allocator;
+    const allocator = default_allocator;
 
     // First we specify what parameters our program can take.
     // We can use `parseParam` to parse a string to a `Param(Help)`
@@ -175,8 +175,8 @@ fn zero_password(password: []u8) void {
 }
 
 fn bcrypt_string(password: []const u8, rounds: ?u6) std.crypto.pwhash.Error![]u8 {
-    var params: bcrypt.Params = .{ .rounds_log = rounds orelse DEFAULT_ROUNDS };
-    var hash_options: bcrypt.HashOptions = .{ .allocator = default_allocator, .params = params, .encoding = std.crypto.pwhash.Encoding.crypt };
+    const params: bcrypt.Params = .{ .rounds_log = rounds orelse DEFAULT_ROUNDS };
+    const hash_options: bcrypt.HashOptions = .{ .allocator = default_allocator, .params = params, .encoding = std.crypto.pwhash.Encoding.crypt };
     var buffer: [bcrypt.hash_length]u8 = undefined;
     _ = try bcrypt.strHash(password, hash_options, buffer[0..]);
     return default_allocator.dupe(u8, buffer[0..]);
@@ -196,9 +196,9 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
     var hidden_input: bool = false;
     if (os == .windows) {
         const ENABLE_ECHO_INPUT: u32 = 4;
-        var handle = try windows.GetStdHandle(std.os.windows.STD_INPUT_HANDLE);
+        const handle = try windows.GetStdHandle(std.os.windows.STD_INPUT_HANDLE);
         var my_val: u32 = 0;
-        var current_mode: LPDWORD = &my_val;
+        const current_mode: LPDWORD = &my_val;
         _ = GetConsoleMode(handle, current_mode);
         _ = SetConsoleMode(handle, current_mode.* & ~ENABLE_ECHO_INPUT);
         hidden_input = true;
