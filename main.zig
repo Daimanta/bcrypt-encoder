@@ -7,7 +7,7 @@ const bcrypt = std.crypto.pwhash.bcrypt;
 const bits = std.os;
 const debug = std.debug;
 const linux = std.os.linux;
-const TCSA = bits.TCSA;
+const TCSA = std.posix.TCSA;
 const windows = std.os.windows;
 
 const Allocator = std.mem.Allocator;
@@ -203,9 +203,9 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
         _ = SetConsoleMode(handle, current_mode.* & ~ENABLE_ECHO_INPUT);
         hidden_input = true;
     } else if (os == .linux) {
-        var import_termios = try bits.tcgetattr(bits.STDIN_FILENO);
-        import_termios.lflag = import_termios.lflag & ~@as(u32, linux.ECHO);
-        try bits.tcsetattr(bits.STDIN_FILENO, TCSA.NOW, import_termios);
+        var import_termios = try std.posix.tcgetattr( std.posix.STDIN_FILENO);
+        import_termios.lflag.ECHO = false;
+        try std.posix.tcsetattr(std.posix.STDIN_FILENO, TCSA.NOW, import_termios);
         hidden_input = true;
     }
     if (hidden_input) {
@@ -225,9 +225,9 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
     if (os == .windows) {
         // Echo re-enables automatically
     } else if (os == .linux) {
-        var import_termios = try bits.tcgetattr(bits.STDIN_FILENO);
-        import_termios.lflag = import_termios.lflag | @as(u32, linux.ECHO);
-        try bits.tcsetattr(bits.STDIN_FILENO, TCSA.NOW, import_termios);
+        var import_termios = try std.posix.tcgetattr(std.posix.STDIN_FILENO);
+        import_termios.lflag.ECHO = true;
+        try std.posix.tcsetattr(std.posix.STDIN_FILENO, TCSA.NOW, import_termios);
     }
     return read;
 }
