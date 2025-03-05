@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const clap = @import("clap.zig");
+const clap2 = @import("clap2/clap2.zig");
 const version = @import("version.zig");
 
 const bcrypt = std.crypto.pwhash.bcrypt;
@@ -22,52 +22,47 @@ const WINAPI = std.os.windows.WINAPI;
 const DEFAULT_ROUNDS: u6 = 10;
 const Mode = enum { encrypt, check };
 
+const help_message =
+\\Usage: bcrypt-encoder [OPTION]
+\\Hashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.
+\\If arguments are possible, they are mandatory unless specified otherwise.
+\\
+\\      -c, --check <HASH>      Prompts for a password. 'true' or 'false' will be returned whether the password matches the hash. Cannot be combined with -er.
+\\      -e, --encrypt           Prompts for a password. The result will be a bcrypt hash of the password. Cannot be combined with -c. Default option.
+\\      -h, --help              Display this help and exit.
+\\      -s, --stdin             Read the input text from stdin instead of prompting.
+\\      -r, --rounds <NUM>      Indicates the log number of rounds, 1<= rounds <= 31. Default value is 10.
+\\      -V, --version           Display the version number and exit.
+\\
+\\
+;
 pub fn main() !void {
-    const allocator = default_allocator;
-
-    // First we specify what parameters our program can take.
-    // We can use `parseParam` to parse a string to a `Param(Help)`
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-c, --check <HASH>     Prompts for a password. 'true' or 'false' will be returned whether the password matches the hash. Cannot be combined with -er.") catch unreachable,
-        clap.parseParam("-e, --encrypt     Prompts for a password. The result will be a bcrypt hash of the password. Cannot be combined with -c. Default option.") catch unreachable,
-        clap.parseParam("-h, --help             Display this help and exit.") catch unreachable,
-        clap.parseParam("-s, --stdin             Read the input text from stdin instead of prompting.") catch unreachable,
-        clap.parseParam("-r, --rounds <NUM>     Indicates the log number of rounds, 1<= rounds <= 31. Default value is 10.") catch unreachable,
-        clap.parseParam("-V, --version     Display the version number and exit.") catch unreachable,
+    const args: []const clap2.Argument = &[_]clap2.Argument{
+        clap2.Argument.FlagArgument(null, &[_][]const u8{"help"}),
+        clap2.Argument.FlagArgument("e", &[_][]const u8{"encrypt"}),
+        clap2.Argument.FlagArgument("s", &[_][]const u8{"stdin"}),
+        clap2.Argument.FlagArgument("V", &[_][]const u8{"version"}),
+        clap2.Argument.OptionArgument("c", &[_][]const u8{"check"}, false),
+        clap2.Argument.OptionArgument("r", &[_][]const u8{"rounds"}, false),
     };
 
-    // We then initialize an argument iterator. We will use the OsIterator as it nicely
-    // wraps iterating over arguments the most efficient way on each os.
-    var iter = try clap.args.OsIterator.init(allocator);
-    defer iter.deinit();
-
-    // Initalize our diagnostics, which can be used for reporting useful errors.
-    // This is optional. You can also just pass `null` to `parser.next` if you
-    // don't care about the extra information `Diagnostics` provides.
-    var diag = clap.Diagnostic{};
-
-    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
-        // Report 'Invalid argument [arg]'
-        diag.report(std.io.getStdOut().writer(), err) catch {};
-        return;
-    };
-    defer args.deinit();
+    var parser = clap2.Parser.init(args, .{});
+    defer parser.deinit();
 
     var rounds: ?u6 = null;
     var mode = Mode.encrypt;
 
-    if (args.flag("--help")) {
-        print("Usage: bcrypt-encoder [OPTION]\nHashes password with the bcrypt algorithm. Also allows checking if a password matches a provided hash.\nIf arguments are possible, they are mandatory unless specified otherwise.\n\n", .{});
-        var buf: [1024]u8 = undefined;
-        var slice_stream = std.io.fixedBufferStream(&buf);
-        try clap.help(std.io.getStdOut().writer(), &params);
-        print("{s}\n", .{slice_stream.getWritten()});
+    if (parser.flag("help")) {
+        print(help_message, .{});
+        std.posix.exit(0);
         return;
-    } else if (args.flag("--version")) {
+    } else if (parser.flag("V")) {
         print("Bcrypt-encoder version {d}.{d}.{d} © Léon van der Kaap 2021\nThis software is BSD 3-clause licensed.\n", .{ version.major, version.minor, version.patch });
+        std.posix.exit(0);
         return;
     }
-    if (args.option("--rounds")) |n| {
+    if (parser.option("rounds").found) {
+        const n = parser.option("rounds").value.?;
         var temp: u32 = 0;
         if (std.fmt.parseInt(u32, n[0..], 10)) |num| {
             temp = num;
@@ -84,11 +79,12 @@ pub fn main() !void {
         }
     }
 
-    const encrypt = args.flag("-e");
-    const use_stdin = args.flag("-s");
+    const encrypt = parser.flag("e");
+    const use_stdin = parser.flag("s");
     var hash: [60]u8 = undefined;
 
-    if (args.option("-c")) |n| {
+    if (parser.option("c").found) {
+        const n = parser.option("c").value.?;
         if (encrypt) {
             print("-c conflicts with -e\n", .{});
             return;
@@ -175,7 +171,7 @@ fn zero_password(password: []u8) void {
 }
 
 fn bcrypt_string(password: []const u8, rounds: ?u6) std.crypto.pwhash.Error![]u8 {
-    const params: bcrypt.Params = .{ .rounds_log = rounds orelse DEFAULT_ROUNDS };
+    const params: bcrypt.Params = .{ .rounds_log = rounds orelse DEFAULT_ROUNDS, .silently_truncate_password = false };
     const hash_options: bcrypt.HashOptions = .{ .allocator = default_allocator, .params = params, .encoding = std.crypto.pwhash.Encoding.crypt };
     var buffer: [bcrypt.hash_length]u8 = undefined;
     _ = try bcrypt.strHash(password, hash_options, buffer[0..]);
@@ -183,7 +179,7 @@ fn bcrypt_string(password: []const u8, rounds: ?u6) std.crypto.pwhash.Error![]u8
 }
 
 fn verify_password(hash: [60]u8, password: []const u8) bool {
-    bcrypt.strVerify(hash[0..], password, .{}) catch return false;
+    bcrypt.strVerify(hash[0..], password, .{.silently_truncate_password = false}) catch return false;
     return true;
 }
 
