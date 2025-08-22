@@ -2,11 +2,13 @@ const std = @import("std");
 
 const clap2 = @import("clap2/clap2.zig");
 const version = @import("version.zig");
+const print_tools = @import("util/print_tools.zig");
 
 const bcrypt = std.crypto.pwhash.bcrypt;
 const bits = std.os;
 const debug = std.debug;
 const linux = std.os.linux;
+const print = print_tools.print;
 const TCSA = std.posix.TCSA;
 const windows = std.os.windows;
 
@@ -106,7 +108,7 @@ pub fn main() !void {
     if (mode == Mode.encrypt) {
         var password: []u8 = undefined;
         if (use_stdin) {
-            const stdin = std.io.getStdIn().reader();
+            const stdin = std.fs.File.stdin().deprecatedReader();
             password = stdin.readAllAlloc(read_allocator.allocator(), 1 << 30) catch {
                 print("Reading stdin failed\n", .{});
                 return;
@@ -136,7 +138,7 @@ pub fn main() !void {
     } else if (mode == Mode.check) {
         var password: []u8 = undefined;
         if (use_stdin) {
-            const stdin = std.io.getStdIn().reader();
+            const stdin = std.fs.File.stdin().deprecatedReader();
             password = stdin.readAllAlloc(read_allocator.allocator(), 1 << 30) catch {
                 print("Reading stdin failed\n", .{});
                 return;
@@ -216,7 +218,7 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
     const max_size: usize = 1000;
     // Deallocation at end of program
 
-    const read = try std.io.getStdIn().reader().readUntilDelimiterAlloc(allocator, newline, max_size);
+    const read = try std.fs.File.stdin().deprecatedReader().readUntilDelimiterAlloc(allocator, newline, max_size);
 
     if (os == .windows) {
         // Echo re-enables automatically
@@ -226,8 +228,4 @@ fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
         try std.posix.tcsetattr(std.posix.STDIN_FILENO, TCSA.NOW, import_termios);
     }
     return read;
-}
-
-pub fn print(comptime format_string: []const u8, args: anytype) void {
-    std.io.getStdOut().writer().print(format_string, args) catch return;
 }
