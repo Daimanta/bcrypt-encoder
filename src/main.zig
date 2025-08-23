@@ -19,7 +19,6 @@ const BOOL = std.os.windows.BOOL;
 const DWORD = std.os.windows.DWORD;
 const HANDLE = std.os.windows.HANDLE;
 const LPDWORD = *DWORD;
-const WINAPI = std.os.windows.WINAPI;
 
 const DEFAULT_ROUNDS: u6 = 10;
 const Mode = enum { encrypt, check };
@@ -185,7 +184,7 @@ fn verify_password(hash: [60]u8, password: []const u8) bool {
     return true;
 }
 
-pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(WINAPI) BOOL;
+pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: HANDLE, dwMode: DWORD) callconv(.winapi) BOOL;
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: HANDLE, lpMode: LPDWORD) BOOL;
 
 fn read_string_silently(allocator: std.mem.Allocator) ![]u8 {
