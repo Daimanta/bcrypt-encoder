@@ -2,7 +2,7 @@
 
 Bcrypt Encoder is licensed under the '3-clause BSD' license.
 
-Copyright (c) 2021, Léon van der Kaap
+Copyright (c) 2025, Léon van der Kaap
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
